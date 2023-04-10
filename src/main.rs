@@ -5,6 +5,11 @@ use std::{
 
 use task::{Task, TaskType};
 
+// Goal: Use a decentralized approach where all worker threads are allowed to issue tasks to other threads and execute tasks assigned to them. ( spawn more rust hardware threads each time but be wary of memory usage and computation overhead )
+// Or Use a shared task pool with no explicitly designated master thread. 
+
+// Q: No tasks have to wait on other tasks right? Seemingly doesnt seem to be an issue
+
 fn main() {
     let (seed, starting_height, max_children) = get_args();
 
@@ -13,7 +18,7 @@ fn main() {
         seed, starting_height, max_children
     );
 
-    let mut count_map = HashMap::new();
+    let mut count_map = HashMap::new(); // Dont need, split  into 3 usize variables so that tasks of different types wont wait on each other to update the count
     let mut taskq = VecDeque::from(Task::generate_initial(seed, starting_height, max_children));
 
     let mut output: u64 = 0;
