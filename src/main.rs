@@ -11,6 +11,8 @@ use std::sync::{
         AtomicUsize,
         Ordering::Relaxed, 
         Ordering::SeqCst,
+        Ordering::Release,
+        Ordering::Acquire,
         AtomicU64
     },
     Arc,
@@ -43,7 +45,7 @@ static NEXT_HEIGHT_CNT: AtomicUsize = AtomicUsize::new(0);
 static INPUT_CNT:  AtomicUsize = AtomicUsize::new(0);
 static OUTPUT_CNT: AtomicUsize = AtomicUsize::new(0);
 
-static FINAL_H_CNT: AtomicUsize = AtomicUsize::new(0);
+// static FINAL_H_CNT: AtomicUsize = AtomicUsize::new(0);
 
 static CPU_CNT: AtomicUsize = AtomicUsize::new(4);
 
@@ -63,10 +65,9 @@ fn main() {
 
     let main_cpu_cnt = CPU_CNT.load(Relaxed);
 
-    let is_done_cond = Arc::new((Mutex::new(0), Condvar::new()));
+    // let is_done_cond = Arc::new((Mutex::new(0), Condvar::new()));
 
-    let pool = ThreadPool::new(main_cpu_cnt);
-    // CHAN_SIZE.store(main_cpu_cnt * Q_SIZE_MULTI, Relaxed);
+    // let pool = ThreadPool::new(main_cpu_cnt);
     let (tx1, rx1) = channel::unbounded::<Task>(); //channel::bounded::<Task>(CHAN_SIZE.load(Relaxed));
 
     let (tx2, rx2) = channel::unbounded::<Task>();
@@ -86,16 +87,17 @@ fn main() {
             _ => todo!()
         }
     }
-
-    for _ in 0..main_cpu_cnt{
-        let is_done_cond2 = Arc::clone(&is_done_cond);
+    let mut handles = Vec::new();
+    for idx in 0..main_cpu_cnt{
+        println!("Thread number  {idx}");
+        // let is_done_cond2 = Arc::clone(&is_done_cond);
         let (t_tx1, t_rx1) = (tx1.clone(), rx1.clone());
         let (t_tx2, t_rx2) = (tx2.clone(), rx2.clone());
-        pool.execute(move || {
+        let handle = thread::spawn(move || {
             while INPUT_CNT.load(SeqCst) > OUTPUT_CNT.load(SeqCst) {
                 let cur_height = CUR_HEIGHT.load(SeqCst);
                 // Consume all current height tasks
-                println!("Thread: Consume all current height tasks {}", cur_height);
+                // println!("Thread: Consume all current height tasks {}", cur_height);
                 let (cur_tx, cur_rx) = match cur_height % 2 {
                     0 => (&t_tx2, &t_rx1),
                     1 => (&t_tx1, &t_rx2),
@@ -112,27 +114,28 @@ fn main() {
                     let result = next.execute();
                     OUTPUT.fetch_xor(result.0, Relaxed);
                     INPUT_CNT.fetch_add(result.1.len(), SeqCst);
-                    NEXT_HEIGHT_CNT.fetch_add(result.1.len(), SeqCst);
+                    if cur_height > 0 {
+                        NEXT_HEIGHT_CNT.fetch_add(result.1.len(), SeqCst);
+                    }
+                    
                     OUTPUT_CNT.fetch_add(1, SeqCst);
 
                     // Fill with all next height tasks
                     for new_task in result.1.iter() {
                         cur_tx.send(new_task.clone()).unwrap();
                     }
-                    CUR_HEIGHT_CNT.fetch_sub(1, SeqCst);
+                    CUR_HEIGHT_CNT.fetch_sub(1, Release);
                 }
-                while CUR_HEIGHT_CNT.load(SeqCst) > 0 {}
-                // println!("Finished all on this level");
+                while CUR_HEIGHT_CNT.load(Acquire) > 0 {}
                 if cur_height == 0 {
-                    println!("Finished all levels!");
-                    println!("Unlocking the exit");
-                    let (lock, cvar) = &*is_done_cond2;
-                    let mut is_done = lock.lock().unwrap();
-                    *is_done += 1; // true
-                    cvar.notify_one();
-                    FINAL_H_CNT.fetch_add(1, SeqCst);
+                    // println!("Finished all levels!");
+                    // println!("Unlocking the exit");
+                    // let (lock, cvar) = &*is_done_cond2;
+                    // let mut is_done = lock.lock().unwrap();
+                    // *is_done += 1; // true
+                    // cvar.notify_one();
+                    // FINAL_H_CNT.fetch_add(1, SeqCst);
                     return;
-                    // break;
                 }
                 match CUR_HEIGHT.compare_exchange(cur_height, cur_height - 1, SeqCst, SeqCst){
                     Ok(_) => {}
@@ -153,6 +156,7 @@ fn main() {
                 // println!("NEXT_HEIGHT_CNT vs CUR_HEIGHT_CNT: {}, {}", NEXT_HEIGHT_CNT.load(SeqCst), CUR_HEIGHT_CNT.load(SeqCst));
             }
         });
+        handles.push(handle);
     }
 
     // let (lock, cvar) = &*is_done_cond;
@@ -164,10 +168,15 @@ fn main() {
     //     println!("Isdone is now {is_done}");
     // }
 
-    while FINAL_H_CNT.load(SeqCst) < main_cpu_cnt {
-        println!("FINAL_H_CNT: {}", FINAL_H_CNT.load(SeqCst));
-        thread::sleep(Duration::from_secs(2));
-    };
+    // while FINAL_H_CNT.load(SeqCst) < main_cpu_cnt {
+    //     println!("FINAL_H_CNT: {}", FINAL_H_CNT.load(SeqCst));
+    //     thread::sleep(Duration::from_secs(2));
+    // };
+
+
+    for handle in handles {
+        handle.join().unwrap();
+    }
     
     println!("FINAL Input vs out: {}, {}", INPUT_CNT.load(SeqCst), OUTPUT_CNT.load(SeqCst));
 
