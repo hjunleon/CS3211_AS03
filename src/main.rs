@@ -3,7 +3,7 @@ use core::num;
 use std::{
     thread,
     collections::{HashMap, VecDeque},
-    time::Instant,
+    time::Instant, sync::mpsc::channel,
 };
 
 use std::sync::{
@@ -42,8 +42,10 @@ static OUTPUT_CNT: AtomicUsize = AtomicUsize::new(0);
 // static FINAL_CNT: AtomicUsize = AtomicUsize::new(0);
 
 static CPU_CNT: AtomicUsize = AtomicUsize::new(4);
-
+// static CHAN_SIZE: AtomicUsize = AtomicUsize::new(4);
 const Q_SIZE_MULTI: usize = 16;
+
+
 
 fn main() {
     CPU_CNT.store(num_cpus::get(), Relaxed);
@@ -58,10 +60,10 @@ fn main() {
     let main_cpu_cnt = CPU_CNT.load(Relaxed);
 
     let is_done_cond = Arc::new((Mutex::new(false), Condvar::new()));
-    
-    let pool = ThreadPool::new(main_cpu_cnt);
 
-    let (tx, rx) = channel::bounded::<Task>(main_cpu_cnt * Q_SIZE_MULTI);
+    let pool = ThreadPool::new(main_cpu_cnt);
+    // CHAN_SIZE.store(main_cpu_cnt * Q_SIZE_MULTI, Relaxed);
+    let (tx, rx) = channel::unbounded::<Task>(); //channel::bounded::<Task>(CHAN_SIZE.load(Relaxed));
 
     // let mut count_map = HashMap::new(); // Dont need, split  into 3 usize variables so that tasks of different types wont wait on each other to update the count
     let mut taskq = VecDeque::from(Task::generate_initial(seed, starting_height, max_children));
@@ -101,7 +103,6 @@ fn main() {
         let t_tx = tx.clone();
         let t_rx = rx.clone();
         pool.execute(move || {
-
             // let mut final_cnt = FINAL_CNT.load(Relaxed);
             // let mut one_cnt: usize = ONE_HEIGHT_CNT.load(Relaxed);
             // one_cnt == 0 || final_cnt < one_cnt
@@ -127,6 +128,7 @@ fn main() {
                 // }
                 // println!("Pushing {} new tasks ", result.1.len());
                 for new_task in result.1.iter() {
+                    // t_tx.se
                     t_tx.send(new_task.clone()).unwrap();
                 }
                 // one_cnt = ONE_HEIGHT_CNT.load(Relaxed);
