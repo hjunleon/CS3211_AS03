@@ -1,16 +1,13 @@
 use std::{
     collections::{HashMap, VecDeque},
     time::Instant,
+    sync::{Arc, Mutex},
 };
 
 use task::{Task, TaskType};
 
-// Goal: Use a decentralized approach where all worker threads are allowed to issue tasks to other threads and execute tasks assigned to them. ( spawn more rust hardware threads each time but be wary of memory usage and computation overhead )
-// Or Use a shared task pool with no explicitly designated master thread. 
-
-// Q: No tasks have to wait on other tasks right? Seemingly doesnt seem to be an issue
-
-fn main() {
+#[tokio::main]
+async fn main() {
     let (seed, starting_height, max_children) = get_args();
 
     eprintln!(
@@ -18,30 +15,52 @@ fn main() {
         seed, starting_height, max_children
     );
 
-    let mut count_map = HashMap::new(); // Dont need, split  into 3 usize variables so that tasks of different types wont wait on each other to update the count
+    let count_map = Arc::new(Mutex::new(HashMap::new())); 
     let mut taskq = VecDeque::from(Task::generate_initial(seed, starting_height, max_children));
 
-    let mut output: u64 = 0;
+    let output: Arc<Mutex<u64>> = Arc::new(Mutex::new(0));
 
     let start = Instant::now();
-    while let Some(next) = taskq.pop_front() {
-        *count_map.entry(next.typ).or_insert(0usize) += 1;
-        let result = next.execute();
-        output ^= result.0;
-        taskq.extend(result.1.into_iter());
+
+    while !taskq.is_empty() {
+        let mut results: Vec<tokio::task::JoinHandle<Vec<Task>>> = Vec::new();
+        for t in taskq {
+            results.push(tokio::task::spawn(run_task(t, output.clone(), count_map.clone())));
+        }
+
+        taskq = VecDeque::new();
+        for res in results {
+            taskq.extend(res.await.unwrap().into_iter());
+        }
     }
     let end = Instant::now();
 
     eprintln!("Completed in {} s", (end - start).as_secs_f64());
 
+    let o1 = output.lock().unwrap();
+    let o2 = *count_map.lock().unwrap().get(&TaskType::Hash).unwrap_or(&0);
+    let o3 = *count_map.lock().unwrap().get(&TaskType::Derive).unwrap_or(&0);
+    let o4 = *count_map.lock().unwrap().get(&TaskType::Random).unwrap_or(&0);
+
     println!(
         "{},{},{},{}",
-        output,
-        count_map.get(&TaskType::Hash).unwrap_or(&0),
-        count_map.get(&TaskType::Derive).unwrap_or(&0),
-        count_map.get(&TaskType::Random).unwrap_or(&0)
+        o1, o2, o3, o4
     );
 }
+
+async fn run_task(task: Task, 
+                    output: Arc<Mutex<u64>>,
+                    count_map: Arc<Mutex<HashMap<TaskType, usize>>>) -> Vec<Task> {
+    {
+        *count_map.lock().unwrap().entry(task.typ).or_insert(0usize) += 1;
+    }
+    let result = task.execute();
+    {
+        *output.lock().unwrap() ^= result.0;
+    }
+    result.1
+}
+
 
 // There should be no need to modify anything below
 

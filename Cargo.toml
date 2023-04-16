@@ -7,6 +7,7 @@ edition = "2021"
 rand = "0.8"
 rand_chacha = "0.3"
 ring = "0.16"
+tokio = { version = "1", features = ["full"] }
 
 # You may add dependencies as needed. Before doing so, check the list of
 # approved crates, which will be on the assignment FAQ. If you wish to use a
