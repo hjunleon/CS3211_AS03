@@ -3,7 +3,7 @@ use core::num;
 use std::{
     thread,
     collections::{HashMap, VecDeque},
-    time::{Instant, Duration}, sync::mpsc::channel,
+    time::{Instant, Duration}
 };
 
 use std::sync::{
@@ -18,7 +18,8 @@ use std::sync::{
     Arc,
     Barrier,
     Condvar,
-    Mutex
+    Mutex,
+    RwLock
 };
 
 use crossbeam::{atomic, channel};
@@ -39,7 +40,7 @@ static OUTPUT: AtomicU64 = AtomicU64::new(0);
 
 
 fn task_handler(next: &Task) -> u64{
-    println!("Thread: Received task at height {}", next.height);
+    // println!("Thread: Received task at height {}", next.height);
     match next.typ {
         TaskType::Derive => DERIVE_COUNT.fetch_add(1, Relaxed),
         TaskType::Hash => HASH_COUNT.fetch_add(1, Relaxed),
@@ -71,7 +72,7 @@ fn main() {
 
     println!("taskq has {} tasks initially.", taskq.len());
 
-    let taskq = Arc::new(Mutex::new(taskq));
+    let taskq = Arc::new(RwLock::new(taskq));
 
     let start = Instant::now();
 
@@ -80,10 +81,13 @@ fn main() {
         println!("Thread number  {worker_id}");
         let t_q = Arc::clone(&taskq);
         let handle = thread::spawn(move || {
-            let t_q2 = t_q.lock().expect("Mutex poisoned");
+            println!("Hello from thread {worker_id}");
+            let t_q2 = t_q.read().expect("Mutex poisoned");
             for i in (worker_id..init_taskq_len).step_by(main_cpu_cnt){
+                println!("Thread {worker_id} processing initial task {i}");
                 let cur_task = &t_q2[i];
                 let output = task_handler(cur_task);
+                println!("Returned to top level!");
                 OUTPUT.fetch_xor(output, Relaxed);
             }
         });
