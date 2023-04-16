@@ -125,6 +125,7 @@ fn main() {
                         cur_tx.send(new_task.clone()).unwrap();
                     }
                     CUR_HEIGHT_CNT.fetch_sub(1, Release);
+                    println!("NEXT_HEIGHT_CNT vs CUR_HEIGHT_CNT: {}, {}", NEXT_HEIGHT_CNT.load(Relaxed), CUR_HEIGHT_CNT.load(Relaxed));
                 }
                 while CUR_HEIGHT_CNT.load(Acquire) > 0 {}
                 if cur_height == 0 {
@@ -153,7 +154,7 @@ fn main() {
                 };
 
                 // println!("Input vs out: {}, {}", INPUT_CNT.load(SeqCst), OUTPUT_CNT.load(SeqCst));
-                // println!("NEXT_HEIGHT_CNT vs CUR_HEIGHT_CNT: {}, {}", NEXT_HEIGHT_CNT.load(SeqCst), CUR_HEIGHT_CNT.load(SeqCst));
+                println!("NEXT_HEIGHT_CNT vs CUR_HEIGHT_CNT: {}, {}", NEXT_HEIGHT_CNT.load(SeqCst), CUR_HEIGHT_CNT.load(SeqCst));
             }
         });
         handles.push(handle);
@@ -191,10 +192,6 @@ fn main() {
         DERIVE_COUNT.load(Relaxed),
         RAND_COUNT.load(Relaxed)
     );
-
-    // count_map.get(&TaskType::Hash).unwrap_or(&0),
-    // count_map.get(&TaskType::Derive).unwrap_or(&0),
-    // count_map.get(&TaskType::Random).unwrap_or(&0)
 }
 
 // There should be no need to modify anything below
