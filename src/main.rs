@@ -38,6 +38,8 @@ static RAND_COUNT: AtomicUsize = AtomicUsize::new(0);
 
 static OUTPUT: AtomicU64 = AtomicU64::new(0);
 
+static THREAD_STACK_SIZE: usize = 4 * 1024 * 1024 * 1024;
+
 
 fn task_handler(next: &Task) -> u64{
     // println!("Thread: Received task at height {}", next.height);
@@ -47,9 +49,10 @@ fn task_handler(next: &Task) -> u64{
         TaskType::Random => RAND_COUNT.fetch_add(1, Relaxed),
     };
     let mut result = next.execute();
-
+    drop(next);
     for new_task in result.1 {
         result.0 ^= task_handler(&new_task);
+        drop(new_task);
     }
     result.0
 }
@@ -82,7 +85,7 @@ fn main() {
     for worker_id in 0..main_cpu_cnt{
         println!("Thread number  {worker_id}");
         let t_q = Arc::clone(&taskq);
-        let handle = thread::spawn(move || {
+        let handle = thread::Builder::new().stack_size(THREAD_STACK_SIZE).spawn(move || {
             println!("Hello from thread {worker_id}");
             let t_q2 = t_q.read().expect("Mutex poisoned");
             for i in (worker_id..init_taskq_len).step_by(main_cpu_cnt){
@@ -92,7 +95,7 @@ fn main() {
                 println!("Returned to top level!");
                 OUTPUT.fetch_xor(output, Relaxed);
             }
-        });
+        }).unwrap();
         handles.push(handle);
     }
 
