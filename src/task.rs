@@ -19,18 +19,18 @@ pub struct Task {
     pub height: usize,
     pub max_children: usize,
 }
-
-fn generate_set(seed: u64, height: usize, max_children: usize, max_num: usize) -> Vec<Task> {
+// Vec<Task>
+fn generate_set(seed: u64, height: usize, max_children: usize, max_num: usize)  {
     let mut rng = rand_chacha::ChaCha20Rng::seed_from_u64(seed);
     let num_tasks: usize = rng.gen_range(0..=max_num);
-    (0..num_tasks)
+    let iter = (0..num_tasks)
         .map(|_| Task {
             typ: TYPE_ARRAY[rng.gen_range(0..TYPE_ARRAY.len())],
             seed: rng.gen(),
             height,
             max_children,
-        })
-        .collect()
+        }).into_iter();
+    iter
 }
 
 impl Task {
