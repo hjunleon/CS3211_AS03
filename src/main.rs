@@ -1,9 +1,5 @@
-#![allow(unused_imports)]
-use core::num;
 use std::{
-    thread,
-    collections::{HashMap, VecDeque},
-    time::Instant, sync::mpsc::channel,
+    time::Instant
 };
 
 use std::sync::{
@@ -14,12 +10,11 @@ use std::sync::{
         AtomicU64
     },
     Arc,
-    Barrier,
     Condvar,
     Mutex
 };
 
-use crossbeam::{atomic, channel};
+use crossbeam::channel;
 use task::{Task, TaskType};
 
 use threadpool::ThreadPool;
@@ -41,7 +36,7 @@ static OUTPUT_CNT: AtomicUsize = AtomicUsize::new(0);
 static CPU_CNT: AtomicUsize = AtomicUsize::new(4);
 fn main() {
     CPU_CNT.store(num_cpus::get(), Relaxed);
-    println!("CPU_CNT: {}", CPU_CNT.load(Relaxed));
+    // println!("CPU_CNT: {}", CPU_CNT.load(Relaxed));
     
     let (seed, starting_height, max_children) = get_args();
 
@@ -61,7 +56,7 @@ fn main() {
     // let mut taskq = VecDeque::from(Task::generate_initial(seed, starting_height, max_children));
     let taskq: Vec<Task> = Task::generate_initial(seed, starting_height, max_children).collect();
 
-    println!("taskq has {} tasks initially.", taskq.len());
+    // println!("taskq has {} tasks initially.", taskq.len());
 
     INPUT_CNT.fetch_add(taskq.len(), SeqCst);
     let start = Instant::now();
@@ -69,8 +64,8 @@ fn main() {
     for init_next in taskq {
         tx.send(init_next.clone()).unwrap();
     }
-    for worker_id in 0..main_cpu_cnt{
-        println!("Thread number  {worker_id}");
+    for _ in 0..main_cpu_cnt{
+        // println!("Thread number  {worker_id}");
         let is_done_cond2 = Arc::clone(&is_done_cond);
         let t_tx = tx.clone();
         let t_rx = rx.clone();
@@ -80,7 +75,7 @@ fn main() {
             // one_cnt == 0 || final_cnt < one_cnt
             while  INPUT_CNT.load(SeqCst) > OUTPUT_CNT.load(SeqCst) {
                 let next = t_rx.recv().unwrap();
-                println!("Thread: Received task at height {}", next.height);
+                // println!("Thread: Received task at height {}", next.height);
                 match next.typ {
                     TaskType::Derive => DERIVE_COUNT.fetch_add(1, Relaxed),
                     TaskType::Hash => HASH_COUNT.fetch_add(1, Relaxed),
@@ -96,7 +91,7 @@ fn main() {
                     INPUT_CNT.fetch_add(1, SeqCst);
                 }
                 OUTPUT_CNT.fetch_add(1, SeqCst);
-                println!("Input vs out: {}, {}", INPUT_CNT.load(SeqCst), OUTPUT_CNT.load(SeqCst));
+                // println!("Input vs out: {}, {}", INPUT_CNT.load(SeqCst), OUTPUT_CNT.load(SeqCst));
             }
 
             let (lock, cvar) = &*is_done_cond2;
@@ -113,7 +108,7 @@ fn main() {
         is_done = cvar.wait(is_done).unwrap();
     }
     
-    println!("FINAL Input vs out: {}, {}", INPUT_CNT.load(SeqCst), OUTPUT_CNT.load(SeqCst));
+    // println!("FINAL Input vs out: {}, {}", INPUT_CNT.load(SeqCst), OUTPUT_CNT.load(SeqCst));
 
     let end = Instant::now();
 
