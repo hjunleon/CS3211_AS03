@@ -58,14 +58,19 @@ fn main() {
     let (tx, rx) = channel::unbounded::<Task>(); //channel::bounded::<Task>(CHAN_SIZE.load(Relaxed));
 
     // let mut count_map = HashMap::new(); // Dont need, split  into 3 usize variables so that tasks of different types wont wait on each other to update the count
-    let mut taskq = VecDeque::from(Task::generate_initial(seed, starting_height, max_children));
+    // let mut taskq = VecDeque::from(Task::generate_initial(seed, starting_height, max_children));
+    let taskq: Vec<Task> = Task::generate_initial(seed, starting_height, max_children).collect();
 
     println!("taskq has {} tasks initially.", taskq.len());
 
     INPUT_CNT.fetch_add(taskq.len(), SeqCst);
     let start = Instant::now();
 
-    while let Some(init_next) = taskq.pop_front() {
+    for init_next in taskq {
+        tx.send(init_next.clone()).unwrap();
+    }
+    for worker_id in 0..main_cpu_cnt{
+        println!("Thread number  {worker_id}");
         let is_done_cond2 = Arc::clone(&is_done_cond);
         let t_tx = tx.clone();
         let t_rx = rx.clone();
@@ -82,12 +87,15 @@ fn main() {
                     TaskType::Random => RAND_COUNT.fetch_add(1, Relaxed),
                 };
                 let result = next.execute();
+                drop(next);
                 OUTPUT.fetch_xor(result.0, Relaxed);
-                INPUT_CNT.fetch_add(result.1.len(), SeqCst);
-                OUTPUT_CNT.fetch_add(1, SeqCst);
-                for new_task in result.1.iter() {
-                    t_tx.send(new_task.clone()).unwrap();
+                // INPUT_CNT.fetch_add(result.1.len(), SeqCst);
+                // OUTPUT_CNT.fetch_add(1, SeqCst);
+                for new_task in result.1 {
+                    t_tx.send(new_task).unwrap();
+                    INPUT_CNT.fetch_add(1, SeqCst);
                 }
+                OUTPUT_CNT.fetch_add(1, SeqCst);
                 println!("Input vs out: {}, {}", INPUT_CNT.load(SeqCst), OUTPUT_CNT.load(SeqCst));
             }
 
@@ -96,8 +104,8 @@ fn main() {
             *is_done = true;
             cvar.notify_one();
         });
-        tx.send(init_next.clone()).unwrap();
     }
+
     let (lock, cvar) = &*is_done_cond;
     let mut is_done = lock.lock().unwrap();
 
