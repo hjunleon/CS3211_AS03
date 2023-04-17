@@ -48,8 +48,8 @@ fn task_handler(next: &Task) -> u64{
     };
     let mut result = next.execute();
 
-    for new_task in result.1.iter() {
-        result.0 ^= task_handler(new_task);
+    for new_task in result.1 {
+        result.0 ^= task_handler(&new_task);
     }
     result.0
 }
@@ -66,8 +66,10 @@ fn main() {
     let main_cpu_cnt = num_cpus::get(); 
     println!("CPU_CNT: {}", main_cpu_cnt);
 
-    let taskq = VecDeque::from(Task::generate_initial(seed, starting_height, max_children));
+    let taskq: Vec<Task> = Task::generate_initial(seed, starting_height, max_children).collect();
 
+    // let taskq:  Vec<Task>  = VecDeque::from();
+// VecDeque::from(
     let init_taskq_len = taskq.len();
 
     println!("taskq has {} tasks initially.", taskq.len());
