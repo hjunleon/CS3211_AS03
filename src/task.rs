@@ -1,7 +1,7 @@
 // Do not modify this file.
 use rand::{Rng, RngCore, SeedableRng};
 
-pub type TaskResult = (u64, Vec<Task>);
+// pub type TaskResult = (u64, impl Iterator<Item = Task>);
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub enum TaskType {
@@ -20,21 +20,23 @@ pub struct Task {
     pub max_children: usize,
 }
 // Vec<Task>
-fn generate_set(seed: u64, height: usize, max_children: usize, max_num: usize)  {
+// Iterator<Item = Task>
+// -> std::slice::Iter<'_, u8>
+fn generate_set(seed: u64, height: usize, max_children: usize, max_num: usize) -> impl Iterator<Item = Task>  {
     let mut rng = rand_chacha::ChaCha20Rng::seed_from_u64(seed);
     let num_tasks: usize = rng.gen_range(0..=max_num);
     let iter = (0..num_tasks)
-        .map(|_| Task {
+        .map(move |_| Task {
             typ: TYPE_ARRAY[rng.gen_range(0..TYPE_ARRAY.len())],
             seed: rng.gen(),
             height,
             max_children,
-        }).into_iter();
+        });
     iter
 }
 
 impl Task {
-    pub fn execute(&self) -> TaskResult {
+    pub fn execute(&self) -> (u64, impl Iterator<Item = Task>) {
         let output = match self.typ {
             TaskType::Hash => do_hash(self),
             TaskType::Derive => do_derive(self),
@@ -43,7 +45,14 @@ impl Task {
         (
             output,
             if self.height == 0 {
-                Vec::new()
+                // Vec::new()
+                // std::iter::empty::<Task>()
+                generate_set(
+                    self.seed,
+                    self.height,
+                    0,
+                    0,
+                )
             } else {
                 generate_set(
                     self.seed ^ output,
@@ -55,7 +64,7 @@ impl Task {
         )
     }
 
-    pub fn generate_initial(seed: u64, starting_height: usize, max_children: usize) -> Vec<Task> {
+    pub fn generate_initial(seed: u64, starting_height: usize, max_children: usize) -> impl Iterator<Item = Task> {
         generate_set(seed, starting_height, max_children, 64)
     }
 }
