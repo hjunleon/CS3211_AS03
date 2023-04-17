@@ -38,15 +38,7 @@ static OUTPUT: AtomicU64 = AtomicU64::new(0);
 static INPUT_CNT:  AtomicUsize = AtomicUsize::new(0);
 static OUTPUT_CNT: AtomicUsize = AtomicUsize::new(0);
 
-// static ONE_HEIGHT_CNT: AtomicUsize = AtomicUsize::new(0);
-// static FINAL_CNT: AtomicUsize = AtomicUsize::new(0);
-
 static CPU_CNT: AtomicUsize = AtomicUsize::new(4);
-// static CHAN_SIZE: AtomicUsize = AtomicUsize::new(4);
-const Q_SIZE_MULTI: usize = 16;
-
-
-
 fn main() {
     CPU_CNT.store(num_cpus::get(), Relaxed);
     println!("CPU_CNT: {}", CPU_CNT.load(Relaxed));
@@ -71,32 +63,7 @@ fn main() {
     println!("taskq has {} tasks initially.", taskq.len());
 
     INPUT_CNT.fetch_add(taskq.len(), SeqCst);
-
-    // let mut output: u64 = 0;
-
-    // create a barrier that waits for all jobs plus the starter thread
-    // let barrier = Arc::new(Barrier::new(n_jobs + 1));
     let start = Instant::now();
-    // while let Some(next) = taskq.pop_front() {
-    //     match next.typ {
-    //         TaskType::Derive => DERIVE_COUNT.fetch_add(1, Relaxed),
-    //         TaskType::Hash => HASH_COUNT.fetch_add(1, Relaxed),
-    //         TaskType::Random => RAND_COUNT.fetch_add(1, Relaxed),
-    //     };
-    //     // *count_map.entry(next.typ).or_insert(0usize) += 1;
-    //     let result = next.execute();
-    //     println!("Result length: {}",result.1.len());
-    //     if result.1.len() > 0 {
-    //         println!("New height: {}",result.1[0].height);
-    //     }
-        
-    //     // output ^= result.0;
-    //     OUTPUT.fetch_xor(result.0, Relaxed);
-    //     if result.1.len() == 0 {
-    //         FINAL_CNT.fetch_add(1, Relaxed);
-    //     }
-    //     taskq.extend(result.1.into_iter());
-    // }
 
     while let Some(init_next) = taskq.pop_front() {
         let is_done_cond2 = Arc::clone(&is_done_cond);
@@ -118,23 +85,9 @@ fn main() {
                 OUTPUT.fetch_xor(result.0, Relaxed);
                 INPUT_CNT.fetch_add(result.1.len(), SeqCst);
                 OUTPUT_CNT.fetch_add(1, SeqCst);
-                // if result.1.len() > 0 && result.1[0].height == 1 {
-                //     // println!("Thread: I have reached height 1!");
-                //     ONE_HEIGHT_CNT.fetch_add(result.1.len(), SeqCst);
-                // }
-                // if next.height == 0 {
-                //     println!("Thread: I have reached height 0!");
-                //     FINAL_CNT.fetch_add(1, SeqCst);
-                // }
-                // println!("Pushing {} new tasks ", result.1.len());
                 for new_task in result.1.iter() {
-                    // t_tx.se
                     t_tx.send(new_task.clone()).unwrap();
                 }
-                // one_cnt = ONE_HEIGHT_CNT.load(Relaxed);
-                // final_cnt = FINAL_CNT.load(Relaxed);
-                // println!("one_cnt: {one_cnt}");
-                // println!("final_cnt: {final_cnt}");
                 println!("Input vs out: {}, {}", INPUT_CNT.load(SeqCst), OUTPUT_CNT.load(SeqCst));
             }
 
@@ -145,10 +98,6 @@ fn main() {
         });
         tx.send(init_next.clone()).unwrap();
     }
-
-    // while FINAL_CNT.load(Relaxed) < CPU_CNT.load(Relaxed) {
-
-    // }
     let (lock, cvar) = &*is_done_cond;
     let mut is_done = lock.lock().unwrap();
 
@@ -169,10 +118,6 @@ fn main() {
         DERIVE_COUNT.load(Relaxed),
         RAND_COUNT.load(Relaxed)
     );
-
-    // count_map.get(&TaskType::Hash).unwrap_or(&0),
-    // count_map.get(&TaskType::Derive).unwrap_or(&0),
-    // count_map.get(&TaskType::Random).unwrap_or(&0)
 }
 
 // There should be no need to modify anything below
